@@ -14,7 +14,7 @@ FONT_SIZE = 50
 INITIAL_TIME = 2  # segundos
 FINAL_TIME = 1  # segundos
 TOTAL_ROUNDS = 10
-CIRCLE_RADIUS = 20
+CIRCLE_RADIUS = 5
 
 # Colores
 WHITE = (255, 255, 255)
@@ -24,7 +24,7 @@ RED = (255, 0, 0)
 
 # Crear la pantalla
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Juego de Reacción")
+pygame.display.set_caption("La Voz")
 
 # Cargar la fuente
 font = pygame.font.Font(None, FONT_SIZE)
@@ -48,28 +48,36 @@ def play_audio():
     
     return num
 
-# Función para generar la serie de caracteres aleatorios
-def generate_series():
+# Función para generar la serie de caracteres iguales
+def generate_series(correct_length):
     symbols = ['A', 'B', 'C', 'D', '1', '2', '3', '4', '@', '#', '%']
-    length = random.randint(1, 10)
-    series = random.choices(symbols, k=length)
-    return ''.join(series), length
+    symbol = random.choice(symbols)  # Elegir un solo símbolo aleatorio
+    series = symbol * correct_length  # Repetir ese símbolo 'correct_length' veces
+    return series
 
 # Función para dibujar los círculos de estado
 def draw_circles(round_counter, results):
-    # Asegurarse de que la cantidad de resultados no exceda la cantidad de rondas
+    cols = 5  # 5 columnas
+    rows = 2  # 2 filas
+    circle_spacing = 10  # Espaciado entre los círculos
+    circle_radius = CIRCLE_RADIUS
+
     for i in range(round_counter):
-        x = 50 + i * (CIRCLE_RADIUS * 2 + 10)
-        y = 30
-        color = WHITE  # Por defecto, blanco
+        row = i // cols  # Dividir el índice entre las columnas para obtener la fila
+        col = i % cols   # El índice modificado para obtener la columna
+
+        x = 50 + col * (circle_radius * 2 + circle_spacing)
+        y = 30 + row * (circle_radius * 2 + circle_spacing)
+
+        color = WHITE
         if i < len(results):
             if results[i] == 'correct':
                 color = GREEN
             elif results[i] == 'incorrect':
                 color = RED
-        pygame.draw.circle(screen, color, (x, y), CIRCLE_RADIUS)
+        
+        pygame.draw.circle(screen, color, (x, y), circle_radius)
 
-# Función principal del juego
 def main():
     score = 0
     errors = 0
@@ -83,28 +91,28 @@ def main():
         screen.fill(WHITE)
 
         # Generar la serie y el número de audio
-        series, correct_length = generate_series()
         num_audio = play_audio()
+        correct_length = random.randint(1, 10)  # Longitud de la serie aleatoria
+        series = generate_series(correct_length)
 
         # Mostrar la serie de caracteres en pantalla
         text = font.render(series, True, BLACK)
         text_rect = text.get_rect(center=(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2))
         screen.blit(text, text_rect)
 
-        # Contador de tiempo
         start_time = time.time()
         user_responded = False
         user_pressed = False
 
-        # Mostrar el tiempo restante en la parte superior derecha
         while time.time() - start_time < time_per_round:
             screen.fill(WHITE)
-            draw_circles(round_counter, results)  # Dibuja los círculos de estado
-            time_left = time_per_round - (time.time() - start_time)
-            time_text = font.render(f"{int(time_left)}", True, BLACK)
-            screen.blit(time_text, (SCREEN_WIDTH - 100, 30))  # Posición superior derecha
+            draw_circles(round_counter, results)
 
-            # Actualizar la pantalla
+            # Calcular el tiempo transcurrido en milisegundos
+            elapsed_time = (time.time() - start_time) * 1000  # Convertir a milisegundos
+            time_text = font.render(f"{elapsed_time:.3f} ms", True, BLACK)  # Mostrar con 3 decimales
+            screen.blit(time_text, (SCREEN_WIDTH - 250, 30))  # Posición superior derecha
+
             pygame.display.flip()
 
             for event in pygame.event.get():
@@ -116,26 +124,35 @@ def main():
                     user_responded = True
                     reaction_time = time.time() - start_time
                     reaction_times.append(reaction_time)
-                    if correct_length == num_audio:
+
+                    if correct_length == num_audio:  # Condición para acertar
                         score += 1
                         results.append('correct')
-                    else:
+                    else:  # Si no debe presionar la tecla
                         errors += 1
                         results.append('incorrect')
                     break
 
-        if not user_responded:
+        # Si no presionó nada, y el número no coincide, es un acierto
+        if not user_responded and correct_length != num_audio:
+            score += 1
+            results.append('correct')
+
+        # Si no presionó nada y el número coincide, es un error
+        if not user_responded and correct_length == num_audio:
             errors += 1
             results.append('incorrect')
 
         # Aumentar la dificultad reduciendo el tiempo
         if round_counter % 2 == 0:
-            time_per_round = max(FINAL_TIME, time_per_round * 0.75)
+            time_per_round = max(FINAL_TIME, time_per_round * 0.9975)  # Reduce el tiempo en un 0.25% cada 2 rondas
 
-        # Mostrar el tiempo restante o un mensaje de error
+        # Mostrar mensaje de error si no se presiona la tecla correctamente
         if not user_pressed:
             error_message = font.render("¡Te has tardado o presionado mal!", True, BLACK)
-            screen.blit(error_message, (SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2 + 60))
+            text_rect = error_message.get_rect(center=(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)) 
+            error_rect = text_rect.move(0, 128)
+            screen.blit(error_message, error_rect)
 
         pygame.display.flip()
         pygame.time.delay(1000)
@@ -145,8 +162,6 @@ def main():
     accuracy = (score / TOTAL_ROUNDS) * 100
     average_reaction_time = sum(reaction_times) / len(reaction_times) if reaction_times else 0
     result_text = f"Aciertos: {score}/{TOTAL_ROUNDS} ({accuracy:.2f}%)"
-    reaction_time_text = f"Tiempo promedio de reacción: {average_reaction_time:.3f} segundos"
-    error_text = f"Errores: {errors} ({100 - accuracy:.2f}%)"
     
     result = font.render(result_text, True, BLACK)
     reaction_text = font.render(reaction_time_text, True, BLACK)
